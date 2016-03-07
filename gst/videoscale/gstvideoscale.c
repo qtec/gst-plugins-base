@@ -1091,9 +1091,10 @@ gst_video_scale_src_event (GstBaseTransform * trans, GstEvent * event)
 {
   GstVideoScale *videoscale = GST_VIDEO_SCALE_CAST (trans);
   GstVideoFilter *filter = GST_VIDEO_FILTER_CAST (trans);
-  gboolean ret;
+  gboolean ret = TRUE;
   gdouble a;
   GstStructure *structure;
+  gboolean propagate = TRUE;
 
   GST_DEBUG_OBJECT (videoscale, "handling %s event",
       GST_EVENT_TYPE_NAME (event));
@@ -1107,12 +1108,22 @@ gst_video_scale_src_event (GstBaseTransform * trans, GstEvent * event)
 
         structure = (GstStructure *) gst_event_get_structure (event);
         if (gst_structure_get_double (structure, "pointer_x", &a)) {
-          gst_structure_set (structure, "pointer_x", G_TYPE_DOUBLE,
-              a * filter->in_info.width / filter->out_info.width, NULL);
+          if (a >= videoscale->borders_w / 2 && a < filter->out_info.width -
+              videoscale->borders_w / 2) {
+            gst_structure_set (structure, "pointer_x", G_TYPE_DOUBLE,
+                ((a - videoscale->borders_w / 2) * filter->in_info.width /
+                    (filter->out_info.width - videoscale->borders_w)), NULL);
+          } else
+            propagate = FALSE;
         }
         if (gst_structure_get_double (structure, "pointer_y", &a)) {
-          gst_structure_set (structure, "pointer_y", G_TYPE_DOUBLE,
-              a * filter->in_info.height / filter->out_info.height, NULL);
+          if (a >= videoscale->borders_h / 2 && a < filter->out_info.height -
+              videoscale->borders_h / 2) {
+            gst_structure_set (structure, "pointer_y", G_TYPE_DOUBLE,
+                ((a - videoscale->borders_h / 2) * filter->in_info.height /
+                    (filter->out_info.height - videoscale->borders_h)), NULL);
+          } else
+            propagate = FALSE;
         }
       }
       break;
@@ -1120,7 +1131,8 @@ gst_video_scale_src_event (GstBaseTransform * trans, GstEvent * event)
       break;
   }
 
-  ret = GST_BASE_TRANSFORM_CLASS (parent_class)->src_event (trans, event);
+  if (propagate)
+    ret = GST_BASE_TRANSFORM_CLASS (parent_class)->src_event (trans, event);
 
   return ret;
 }
